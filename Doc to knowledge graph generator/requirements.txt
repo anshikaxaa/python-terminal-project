@@ -1,8 +1,0 @@
-fastapi
-uvicorn[standard]
-python-multipart
-requests
-rdflib
-google-generativeai
-PyPDF2
-python-docx
