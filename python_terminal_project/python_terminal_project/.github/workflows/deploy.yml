@@ -1,0 +1,65 @@
+name: Deploy Python Terminal
+
+on:
+  push:
+    tags:
+      - 'v*'
+  release:
+    types: [published]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller --onefile --name python-terminal terminal_final.py
+
+    - name: Create Release
+      if: github.event_name == 'release'
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.event.release.tag_name }}
+        release_name: Release ${{ github.event.release.tag_name }}
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Asset
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/python-terminal
+        asset_name: python-terminal-linux
+        asset_content_type: application/octet-stream
+
+    - name: Build Docker image
+      run: |
+        docker build -t python-terminal .
+        docker tag python-terminal ${{ secrets.DOCKER_USERNAME }}/python-terminal:latest
+        docker tag python-terminal ${{ secrets.DOCKER_USERNAME }}/python-terminal:${{ github.run_number }}
+
+    - name: Push Docker image
+      if: github.event_name == 'release'
+      run: |
+        echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+        docker push ${{ secrets.DOCKER_USERNAME }}/python-terminal:latest
+        docker push ${{ secrets.DOCKER_USERNAME }}/python-terminal:${{ github.run_number }}
